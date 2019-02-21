@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jan  8 19:21:30 2019
+Created on Thu Feb 21 11:46:13 2019
 
-@author: Administrator
+@author: Leo
 """
-
 from price_history import get_market_history_price
-#import pandas as pd
-import matplotlib.pyplot as plt
-import math
 import numpy as np
 import json
+
+from pyecharts import Line
+from pyecharts import Overlap
 
 
 # Moving Average
@@ -56,10 +55,7 @@ def get_data_from_json():
 
 
 def data_process(data):
-    # get BTC data from coinmarketcap.com
-#    data = get_market_history_price(name = 'bitcoin', symbol = 'bitcoin', slug = 'bitcoin')
-    
-    
+  
     # data pre-processing
     days = len(data)
     
@@ -70,7 +66,7 @@ def data_process(data):
     
     for d in reversed(data):
         if d['volume'] == '-' :
-            volume.append(0) #获取不到的数据用1代替
+            volume.append(-1) #获取不到的数据用-1代替
         else:
             volume.append(float(d['volume'].replace(',','')))
         marketcap.append(float(d['marketcap'].replace(',','')))
@@ -78,8 +74,8 @@ def data_process(data):
         btc_price.append(float(d['close'].replace(',','')))
     
     
-    # get data volume != 0
-    v_index = [i for i  in range(days) if volume[i] != 0]
+    # get data volume != -1
+    v_index = [i for i  in range(days) if volume[i] != -1]
     volume_btc = [volume[i] for i in v_index]
     marketcap_btc = [marketcap[i] for i in v_index]
     ts_btc = [ts[i] for i in v_index]
@@ -87,136 +83,68 @@ def data_process(data):
     return v_index, volume_btc, marketcap_btc, ts_btc, btc_price_nvt
 
 
-def cal_NVT_plot(v_index, volume_btc, marketcap_btc, ts_btc, btc_price_nvt, ma_volume, ma_nvt):
+def cal_NVT_plot(chart_title, v_index, volume_btc, marketcap_btc, ts_btc, btc_price_nvt, ma_volume, ma_nvt):
+    """ 
+    计算nvt指标，然后作图展示
+    """
     # calculation NVT signal
-    # MA(1)
-#    ma = 90
-    
+    nvt0_or = [marketcap_btc[i]/volume_btc[i] for i in range(len(v_index))] # 无 ma的nvt
     volume_MA = MA_Avg(volume_btc, ma_volume) # 移动平均volume
     nvt_or = [marketcap_btc[i]/volume_MA[i] for i in range(len(v_index))] # volume ma 之后的nvt
-    nvt0_or = [marketcap_btc[i]/volume_btc[i] for i in range(len(v_index))] # 无 ma的nvt
     nvt_MA_or = MA_Avg(nvt_or,ma_nvt) # nvt 进行ma
     
-    # NVT 上下分位点
-    up_bd = get_percenttile(nvt_or, 90, int(ma_nvt*2)) 
-    down_bd = get_percenttile(nvt_or,10, int(ma_nvt/2))
+    # NVT 上下分位点  合理边界参考
+#    up_bd = get_percenttile(nvt_or, 90, int(ma_nvt*2)) 
+#    down_bd = get_percenttile(nvt_or,10, int(ma_nvt/2))
     
-    # normalized
-#    nvt = [i/max(nvt_or) for i in nvt_or]
-#    nvt0 = [i/max(nvt0_or) for i in nvt0_or]
-#    nvt_MA = [i/max(nvt_MA_or) for i in nvt_MA_or]
+
     
     nvt = [i for i in nvt_or]
     nvt0 = [i for i in nvt0_or]
     nvt_MA = [i for i in nvt_MA_or]
+  
+#===================================pyecharts 作图=============================================
+
+    x_date = [str(int(i)) for i in ts_btc]
+    nvt0_line = Line(chart_title)
+    nvt0_line.add("NVU(original)", x_date, nvt0,
+                  tooltip_tragger="axis", 
+                  tooltip_axispointer_type = 'cross',
+                  is_more_utils = True,
+                  is_datazoom_show = True, datazoom_range = [0,100],
+                  yaxis_max = 10* max(nvt0), yaxis_min = min(nvt0),
+                  yaxis_type = "log", is_xaxislabel_align = True,
+                  line_opacity = 0.3, line_color = 'gray',line_type = 'solid')
     
-    #btc price normalized
+    nvt_line = Line()
+    nvt_line.add("NVU(MA(U)=30)", x_date, nvt, yaxis_type = "log", line_color = 'blue', line_type = 'solid')
     
+    nvt_ma_line = Line()
+    nvt_ma_line.add("MA(NVU)=90", x_date, nvt_MA, yaxis_type = "log", line_color = 'red', line_type = 'solid')
     
-#    x_ts = ts_btc
-#    x_ts = list(range(len(v_index)))
-    
-    
-    # set  x axis 
-    x_ts = [str(int(t/10000)) for t in ts_btc]  # get year
-    axis_year = [i for i in range(1,len(x_ts)) if x_ts[i]!=x_ts[i-1]] # first day every year
-    temp = [i for i in range(1,len(x_ts)) if x_ts[i]==x_ts[i-1]]
-    for i in temp:
-        x_ts[i]=''
-#    x_ts[0] = ''  # 不显示第一个作标年份
-    
+    price_line = Line()    
+    price_line.add("BTC price", x_date, btc_price_nvt,
+                   is_yaxis_show = False,  yaxis_type = "log",
+                   yaxis_min = min(btc_price_nvt)/100,
+                   line_color = 'coral', line_type = 'solid')
         
-    # plot figure    
-    fig, ax1 = plt.subplots()
-   
-    p1, = ax1.plot(list(range(len(v_index))), btc_price_nvt, color='coral')  # btc 价格曲线
     
-    ax2 = ax1.twinx()
-    p2, = ax2.plot(list(range(len(v_index))), nvt, color='blue')  # NVT曲线 volume_MA=90
-    p3, = ax2.plot(list(range(len(v_index))), nvt0, color='gray', alpha=0.2)  # NVT曲线 volume_MA=1
-    p4, = ax2.plot(list(range(len(v_index))), nvt_MA, color='red')  # NVT曲线 volume_MA=90
+    overlap = Overlap(width = 1500, height = 800)
+    overlap.add(nvt0_line)
+    overlap.add(nvt_line)
+    overlap.add(nvt_ma_line)    
+    overlap.add(price_line, yaxis_index = 1, is_add_yaxis = True)
     
-#    p5, = ax2.plot(list(range(len(v_index))), up_bd, color='red')  # NVT up boundary
-#    p6, = ax2.plot(list(range(len(v_index))), down_bd, color='yellow')  # NVT up boundary
-    
-    # 绘制NVT合理区间
-    
-    up_confident = [np.percentile(nvt, 70)]*len(v_index)
-    down_confident = [np.percentile(nvt, 5)]*len(v_index)
-    ax2.plot(list(range(len(v_index))), up_confident,'k--')   # 上界
-    ax2.plot(list(range(len(v_index))), down_confident,'k--')   # 下界
-    
-    
+#    overlap.render("my_NVU.html")
 
-    # 绘制年线
-    x_real = list(range(len(v_index)))
-    for i in axis_year:
-        ax1.plot([x_real[i]]*100, list(np.linspace(0, math.ceil(max(btc_price_nvt)*1.1),100)) ,'k-.', alpha=0.5, lw=1)
+ #=================================================================================   
     
-    
-
-    fig.legend(handles=(p1,p2), labels=('BTC Price USD','NVT Ratio'), loc=1, bbox_to_anchor=(1,1), bbox_transform=ax1.transAxes)
-    
-    ax1.set_yscale('symlog', linthreshy=0.1)
-    ax2.set_yscale('symlog', linthreshy=0.1)
-    
-    ax1.set_ylim(1, math.ceil(max(btc_price_nvt)*1.1))
-#    ax2.set_ylim(0, max(nvt)*10)
-#    ax2.set_ylim(0, 200000)
-    
-    ax1.set_xticks(list(range(len(v_index))))
-    ax1.set_xticklabels(x_ts)
-    
-#    for label in ax1.xaxis.get_ticklabels():
-#        # label is a Text instance
-#        label.set_color('black')
-#        label.set_rotation(0)
-#        label.set_fontsize(12)
-       
-
-#    ax1.set_xticklabels(x_ts)
-    ax1.set_title("Bitcoin NVT signal")
-    ax1.set_xlabel("Time(day)")
-    ax1.set_ylabel("BTC Price USD")
-    ax2.set_ylabel("NVT Ratio")
-    
-    plt.grid(axis = 'y',linestyle='--')
-    
-#    plt.yticks()
-#    ax1.set_xticklabels(x_ts)
-
-    plt.show()
-    
-    return nvt, nvt_MA
+    return overlap
  
 
 if __name__ == '__main__':
     data = get_data_from_json() # 获取数据 网站获取或者本地获取
     v_index, volume_btc, marketcap_btc, ts_btc, btc_price_nvt = data_process(data) # 数据获取以及处理
-    cal_NVT_plot(v_index, volume_btc, marketcap_btc, ts_btc, btc_price_nvt, ma_volume=28, ma_nvt=60) # 计算NVT并做图
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    cal_NVT_plot("", v_index, volume_btc, marketcap_btc, ts_btc, btc_price_nvt, ma_volume=28, ma_nvt=60) # 计算NVT并做图
 
 
