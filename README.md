@@ -1,6 +1,8 @@
 # extended-NVT-model
 I have more tests in the framework of NVT
 
+"nvt_data_from_coinmetrics.py" is main funtion, you can directly run the program
+
 The folling artical is my summary:(picture will be a pacage named fig_nvt)
 
                                                   比特币估值模型——NVT的进一步思考
