@@ -29,7 +29,7 @@ exchangevolume =list(np.array(data['exchangevolume(usd)'])[:,1])
 tx_count =list(np.array(data['txcount'])[:,1])
 
 # activeaddresses
-activeaddresses =list(np.array(data['activeaddresses']))[:,1]
+activeaddresses =list(np.array(data['activeaddresses'])[:,1])
 
 marketcap_btc = list(np.array(data['marketcap(usd)'])[:,1])
 btc_price_nvt = list(np.array(data['price(usd)'])[:,1])
